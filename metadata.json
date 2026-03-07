@@ -1,0 +1,7 @@
+{
+  "name": "SwayamHelp",
+  "description": "An AI-powered Digital Seva Assistant for India, helping citizens discover and apply for government schemes with ease and trust.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
