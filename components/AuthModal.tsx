@@ -1,7 +1,9 @@
 
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { COLORS, getTranslation } from '../constants.tsx';
 import { Language, User } from '../types.ts';
+import { supabase } from '../src/supabaseClient.js';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -13,31 +15,82 @@ interface AuthModalProps {
 const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, lang, onAuthSuccess }) => {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [age, setAge] = useState('');
   const [qualification, setQualification] = useState('');
   const [occupation, setOccupation] = useState('');
   const [residence, setResidence] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
 
   const t = getTranslation(lang);
+  const navigate = useNavigate();
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const mockId = `SH-2026-${Math.floor(1000 + Math.random() * 9000)}`;
-    const mockUser: User = {
-      id: mockId,
-      email: email,
-      name: name || email.split('@')[0],
-      age: age,
-      qualification,
-      occupation,
-      residence,
-      appliedSchemes: []
-    };
-    onAuthSuccess(mockUser);
-    onClose();
+    setError(null);
+    setLoading(true);
+
+    try {
+      if (isLogin) {
+        const { data, error: authError } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+
+        if (authError) throw authError;
+
+        if (data.session && data.user) {
+          const user: User = {
+            id: data.user.id,
+            email: data.user.email || '',
+            name: data.user.user_metadata?.full_name || email.split('@')[0],
+            age: data.user.user_metadata?.age || '',
+            qualification: data.user.user_metadata?.qualification || '',
+            occupation: data.user.user_metadata?.occupation || '',
+            residence: data.user.user_metadata?.residence || '',
+            appliedSchemes: []
+          };
+          onAuthSuccess(user);
+          navigate('/');
+          onClose();
+        } else {
+          setError('Session not established. Please try again.');
+        }
+      } else {
+        const { data, error: authError } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              full_name: name,
+              age,
+              qualification,
+              occupation,
+              residence,
+            }
+          }
+        });
+
+        if (authError) throw authError;
+
+        if (data.user) {
+          // Success: Switch to login view, keep email, show message
+          setIsLogin(true);
+          setPassword(''); // Clear password for the login step
+          setMessage("Your account has been created. Please check your email and verify your address before logging in.");
+          setError(null);
+        }
+      }
+    } catch (err: any) {
+      setError(err.message || 'An error occurred during authentication');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -99,17 +152,35 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, lang, onAuthSucc
 
             <div className="pt-2">
               <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Password</label>
-              <input type="password" placeholder="••••••••" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none" required />
+              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none" required />
             </div>
 
-            <button type="submit" className="w-full py-4 bg-[#0B3C5D] text-white rounded-xl font-bold hover:opacity-90 active:scale-95 transition-all shadow-lg mt-4">
-              {isLogin ? t.login : t.signUp}
+            {error && (
+              <p className="text-red-500 text-xs font-medium mt-2">{error}</p>
+            )}
+
+            {message && (
+              <div className="bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 rounded-xl text-xs font-medium mt-2">
+                {message}
+              </div>
+            )}
+
+            <button 
+              type="submit" 
+              disabled={loading}
+              className={`w-full py-4 bg-[#0B3C5D] text-white rounded-xl font-bold hover:opacity-90 active:scale-95 transition-all shadow-lg mt-4 ${loading ? 'opacity-70 cursor-not-allowed' : ''}`}
+            >
+              {loading ? 'Processing...' : (isLogin ? t.login : t.signUp)}
             </button>
           </form>
 
           <div className="mt-8 text-center text-sm text-slate-500">
             {isLogin ? "New to SwayamHelp?" : "Already have an account?"}{' '}
-            <button onClick={() => setIsLogin(!isLogin)} className="font-bold text-blue-700 hover:underline">
+            <button onClick={() => {
+              setIsLogin(!isLogin);
+              setError(null);
+              setMessage(null);
+            }} className="font-bold text-blue-700 hover:underline">
               {isLogin ? t.signUp : t.login}
             </button>
           </div>

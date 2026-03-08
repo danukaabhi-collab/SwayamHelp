@@ -11,7 +11,7 @@ interface DashboardProps {
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ user, lang, onClose }) => {
-  const [activeTab, setActiveTab] = useState<'profile' | 'about' | 'eligible' | 'apps'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'about' | 'eligible' | 'apps' | 'help'>('profile');
   const [recommendations, setRecommendations] = useState<Scheme[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const t = getTranslation(lang);
@@ -99,6 +99,24 @@ const Dashboard: React.FC<DashboardProps> = ({ user, lang, onClose }) => {
             )}
           </div>
         );
+      case 'help':
+        return (
+          <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm space-y-6">
+            <h3 className="text-2xl font-bold" style={{ color: COLORS.primary }}>{t.help}</h3>
+            <div className="grid sm:grid-cols-2 gap-6">
+              <div className="p-6 bg-slate-50 rounded-2xl border border-slate-100">
+                <h4 className="font-bold mb-2">Technical Support</h4>
+                <p className="text-sm text-slate-600 mb-4">Facing issues with the portal or AI chat?</p>
+                <button className="text-blue-600 font-bold text-sm hover:underline">Contact Tech Team</button>
+              </div>
+              <div className="p-6 bg-slate-50 rounded-2xl border border-slate-100">
+                <h4 className="font-bold mb-2">Scheme Guidance</h4>
+                <p className="text-sm text-slate-600 mb-4">Need help understanding eligibility?</p>
+                <button className="text-blue-600 font-bold text-sm hover:underline">Talk to AI Assistant</button>
+              </div>
+            </div>
+          </div>
+        );
       default:
         return (
           <div className="grid md:grid-cols-3 gap-8">
@@ -174,9 +192,9 @@ const Dashboard: React.FC<DashboardProps> = ({ user, lang, onClose }) => {
       <div className="flex flex-wrap gap-4 mb-8">
         {[
           { id: 'profile', label: t.profile, icon: '👤' },
-          { id: 'about', label: t.aboutUs, icon: '🏛️' },
           { id: 'eligible', label: t.findEligible, icon: '🔍' },
-          { id: 'apps', label: t.myApps, icon: '📝' }
+          { id: 'apps', label: t.myApps, icon: '📝' },
+          { id: 'help', label: t.help, icon: '❓' }
         ].map(tab => (
           <button
             key={tab.id}
