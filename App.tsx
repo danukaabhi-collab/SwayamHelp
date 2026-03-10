@@ -7,23 +7,27 @@ import Hero from './components/Hero.tsx';
 import ChatInterface from './components/ChatInterface.tsx';
 import AuthModal from './components/AuthModal.tsx';
 import Dashboard from './components/Dashboard.tsx';
+import LoginPage from './components/LoginPage.tsx';
+import SignUpPage from './components/SignUpPage.tsx';
 import AboutUs from './components/AboutUs.tsx';
 import Help from './components/Help.tsx';
 import SchemeRoadmapModal from './components/SchemeRoadmapModal.tsx';
 import { CATEGORIES, POPULAR_SCHEMES, COLORS, getTranslation } from './constants.tsx';
 import { discoverSchemes } from './services/geminiService.ts';
+import { databaseService } from './services/databaseService.ts';
 import { supabase } from './src/supabaseClient.js';
 
 const App: React.FC = () => {
   const [lang, setLang] = useState<Language>(Language.ENGLISH);
   const [user, setUser] = useState<User | null>(null);
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [filterCategory, setFilterCategory] = useState<string | null>(null);
   const [dynamicSchemes, setDynamicSchemes] = useState<Scheme[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   
   // Roadmap Modal state
   const [selectedSchemeForRoadmap, setSelectedSchemeForRoadmap] = useState<Scheme | null>(null);
+  const [savedSchemeIds, setSavedSchemeIds] = useState<Set<string>>(new Set());
   
   const t = getTranslation(lang);
 
@@ -44,64 +48,192 @@ const App: React.FC = () => {
 
   const handleAuthSuccess = (newUser: User) => {
     setUser(newUser);
-    setIsAuthModalOpen(false);
   };
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
-    setUser(null);
-    navigate('/');
+    console.log("Logout initiated...");
+    try {
+      if (user) {
+        // Log event in background
+        databaseService.logAuthEvent({
+          user_id: user.id,
+          email: user.email,
+          event_type: 'logout',
+          details: 'User logged out manually'
+        }).catch(err => console.error("Background logout log failed:", err));
+      }
+      
+      // Clear local state first for immediate UI feedback
+      setUser(null);
+      setSavedSchemeIds(new Set());
+      
+      // Attempt to sign out from Supabase
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      
+      console.log("Supabase sign out successful");
+    } catch (error) {
+      console.error("Error during sign out:", error);
+    } finally {
+      // Force a full page reload to clear all memory state and ensure redirection
+      // This is the most reliable way to clear all sensitive data
+      window.location.href = '/login'; 
+    }
   };
 
   const handleExploreClick = (scheme: Scheme) => {
     if (!user) {
-      setIsAuthModalOpen(true);
+      navigate('/login');
     } else {
       setSelectedSchemeForRoadmap(scheme);
     }
   };
 
+  const handleToggleSave = async (scheme: Scheme) => {
+    if (!user) {
+      navigate('/login');
+      return;
+    }
+
+    try {
+      if (savedSchemeIds.has(scheme.id)) {
+        await databaseService.unsaveScheme(user.id, scheme.id);
+        setSavedSchemeIds(prev => {
+          const next = new Set(prev);
+          next.delete(scheme.id);
+          return next;
+        });
+      } else {
+        await databaseService.saveScheme(user.id, scheme);
+        setSavedSchemeIds(prev => new Set(prev).add(scheme.id));
+      }
+    } catch (error) {
+      console.error("Error toggling save:", error);
+    }
+  };
+
   useEffect(() => {
+    const fetchSavedSchemes = async () => {
+      if (user) {
+        try {
+          const saved = await databaseService.getSavedSchemes(user.id);
+          setSavedSchemeIds(new Set(saved.map(s => s.id)));
+        } catch (error) {
+          console.error("Error fetching saved schemes:", error);
+        }
+      } else {
+        setSavedSchemeIds(new Set());
+      }
+    };
+    fetchSavedSchemes();
+  }, [user]);
+
+  const fetchUserData = async (sessionUser: any) => {
+    // Prevent redundant fetches if we already have this user
+    if (user && user.id === sessionUser.id && user.profilePic) return;
+
+    // Set basic user data immediately for faster perceived performance
+    const basicUserData: User = {
+      id: sessionUser.id,
+      email: sessionUser.email || '',
+      name: sessionUser.user_metadata?.full_name || sessionUser.email?.split('@')[0] || 'User',
+      age: sessionUser.user_metadata?.age || '',
+      gender: sessionUser.user_metadata?.gender || '',
+      caste: sessionUser.user_metadata?.caste_category || '',
+      qualification: sessionUser.user_metadata?.qualification || '',
+      occupation: sessionUser.user_metadata?.occupation || '',
+      residence: sessionUser.user_metadata?.state || '',
+      income: sessionUser.user_metadata?.annual_income || '',
+      profilePic: sessionUser.user_metadata?.avatar_url,
+      appliedSchemes: []
+    };
+    
+    // Only set if user is null or ID changed
+    if (!user || user.id !== sessionUser.id) {
+      setUser(basicUserData);
+    }
+
+    try {
+      // Enrich with profile data in the background
+      const profile = await databaseService.getProfile(sessionUser.id);
+      if (profile) {
+        setUser(prev => {
+          if (!prev || prev.id !== sessionUser.id) return prev;
+          return {
+            ...prev,
+            name: profile.full_name || prev.name,
+            age: profile.age || prev.age,
+            gender: profile.gender || prev.gender,
+            caste: profile.caste_category || prev.caste,
+            qualification: profile.qualification || prev.qualification,
+            occupation: profile.occupation || prev.occupation,
+            residence: profile.state || prev.residence,
+            income: profile.annual_income || prev.income,
+            profilePic: profile.profile_pic || prev.profilePic,
+          };
+        });
+      }
+    } catch (e) {
+      console.error("Background profile fetch failed:", e);
+    }
+  };
+
+  useEffect(() => {
+    let isMounted = true;
+    
     const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        const userData: User = {
-          id: session.user.id,
-          email: session.user.email || '',
-          name: session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'User',
-          age: session.user.user_metadata?.age || '',
-          qualification: session.user.user_metadata?.qualification || '',
-          occupation: session.user.user_metadata?.occupation || '',
-          residence: session.user.user_metadata?.residence || '',
-          profilePic: session.user.user_metadata?.avatar_url,
-          appliedSchemes: []
-        };
-        setUser(userData);
+      try {
+        const { data: { session } } = await supabase.auth.getSession() as any;
+        
+        if (isMounted && session?.user) {
+          await fetchUserData(session.user);
+        }
+      } catch (error) {
+        console.warn("Session check delayed or failed:", error);
+      } finally {
+        if (isMounted) setIsAuthLoading(false);
       }
     };
 
     checkSession();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log("Auth event:", event);
       if (session?.user) {
-        const userData: User = {
-          id: session.user.id,
-          email: session.user.email || '',
-          name: session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'User',
-          age: session.user.user_metadata?.age || '',
-          qualification: session.user.user_metadata?.qualification || '',
-          occupation: session.user.user_metadata?.occupation || '',
-          residence: session.user.user_metadata?.residence || '',
-          profilePic: session.user.user_metadata?.avatar_url,
-          appliedSchemes: []
-        };
-        setUser(userData);
+        // Set loading to false immediately if we have a user to show the app faster
+        if (isMounted) setIsAuthLoading(false);
+        if (isMounted) await fetchUserData(session.user);
+        
+        if (event === 'SIGNED_IN') {
+          await databaseService.logAuthEvent({
+            user_id: session.user.id,
+            email: session.user.email || '',
+            event_type: 'login',
+            details: 'User signed in'
+          });
+        }
       } else {
-        setUser(null);
+        if (isMounted) setUser(null);
+        if (isMounted) setIsAuthLoading(false);
+        
+        if (event === 'SIGNED_OUT') {
+          console.log("User signed out event detected");
+          if (isMounted) {
+            setUser(null);
+            setSavedSchemeIds(new Set());
+            // If we are on a protected route, redirect to login
+            if (location.pathname.startsWith('/dashboard')) {
+              navigate('/login');
+            }
+          }
+        }
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   useEffect(() => {
@@ -118,16 +250,32 @@ const App: React.FC = () => {
     fetchCategoricalSchemes();
   }, [filterCategory, lang, user]);
 
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get('type') === 'recovery') {
+      navigate('/login?type=recovery');
+    }
+  }, [location.search, navigate]);
+
   const displayedSchemes = filterCategory 
     ? dynamicSchemes 
     : POPULAR_SCHEMES;
+
+  if (isAuthLoading) {
+    return (
+      <div className="fixed inset-0 bg-white flex flex-col items-center justify-center z-[200]">
+        <div className="w-16 h-16 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin mb-4"></div>
+        <p className="text-slate-500 font-medium animate-pulse">Initializing SwayamHelp...</p>
+      </div>
+    );
+  }
 
   return (
     <Layout 
       lang={lang} 
       onLanguageChange={setLang}
       user={user}
-      onAuthClick={() => setIsAuthModalOpen(true)}
+      onAuthClick={() => navigate('/login')}
       onLogout={handleLogout}
     >
       <Routes>
@@ -188,17 +336,28 @@ const App: React.FC = () => {
 
                 <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
                   {displayedSchemes.length > 0 ? displayedSchemes.map(scheme => (
-                    <div key={scheme.id} className="bg-white p-8 rounded-3xl shadow-sm border border-slate-200 hover:shadow-md transition-all flex flex-col h-full animate-in fade-in zoom-in-95 duration-300">
+                    <div key={scheme.id} className="bg-white p-8 rounded-3xl shadow-sm border border-slate-200 hover:shadow-md transition-all flex flex-col h-full animate-in fade-in zoom-in-95 duration-300 group">
                       <div className="flex justify-between items-center mb-6">
                         <span className="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-blue-50 text-blue-800 border border-blue-100">
                           {filterCategory && filterCategory !== 'search' ? t[`cat_${filterCategory}`] : (scheme.category ? t[`cat_${scheme.category}`] : 'Government')}
                         </span>
-                        {filterCategory && (
-                           <span className="text-[10px] font-bold text-green-600 flex items-center gap-1">
-                             <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span>
-                             {t.live_ngsp}
-                           </span>
-                        )}
+                        <div className="flex items-center gap-2">
+                          <button 
+                            onClick={() => handleToggleSave(scheme)}
+                            className={`p-2 rounded-full transition-all ${savedSchemeIds.has(scheme.id) ? 'bg-red-50 text-red-500' : 'bg-slate-50 text-slate-400 hover:bg-red-50 hover:text-red-500'}`}
+                            title={savedSchemeIds.has(scheme.id) ? "Unsave" : "Save"}
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 ${savedSchemeIds.has(scheme.id) ? 'fill-current' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                            </svg>
+                          </button>
+                          {filterCategory && (
+                            <span className="text-[10px] font-bold text-green-600 flex items-center gap-1">
+                              <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span>
+                              {t.live_ngsp}
+                            </span>
+                          )}
+                        </div>
                       </div>
                       <h3 className="text-lg font-bold mb-3" style={{ color: COLORS.primary }}>{scheme.name}</h3>
                       <p className="text-slate-600 text-xs mb-6 flex-grow leading-relaxed">
@@ -227,7 +386,7 @@ const App: React.FC = () => {
               </div>
             </section>
 
-            <section className="py-24 bg-white">
+            <section id="how-it-works" className="py-24 bg-white scroll-mt-20">
               <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div className="text-center max-w-3xl mx-auto mb-16">
                   <h2 className="text-3xl font-bold mb-6" style={{ color: COLORS.primary }}>{t.flow_title}</h2>
@@ -252,11 +411,11 @@ const App: React.FC = () => {
         } />
         <Route path="/about" element={<AboutUs lang={lang} />} />
         <Route path="/help" element={<Help lang={lang} />} />
-        <Route path="/dashboard" element={user ? <Dashboard user={user} lang={lang} onClose={() => navigate('/')} /> : <div className="min-h-screen flex items-center justify-center bg-slate-50"><div className="text-center p-8 bg-white rounded-3xl shadow-xl max-w-sm w-full"><h2 className="text-2xl font-bold mb-4 text-slate-800">Private Page</h2><p className="text-slate-600 mb-6">Please login to access your dashboard.</p><button onClick={() => setIsAuthModalOpen(true)} className="w-full py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all">Login Now</button></div></div>} />
+        <Route path="/login" element={<LoginPage lang={lang} onAuthSuccess={handleAuthSuccess} user={user} />} />
+        <Route path="/signup" element={<SignUpPage lang={lang} onAuthSuccess={handleAuthSuccess} user={user} />} />
+        <Route path="/dashboard" element={user ? <Dashboard user={user} lang={lang} onClose={() => navigate('/')} onLogout={handleLogout} /> : <div className="min-h-screen flex items-center justify-center bg-slate-50"><div className="text-center p-8 bg-white rounded-3xl shadow-xl max-w-sm w-full"><h2 className="text-2xl font-bold mb-4 text-slate-800">Private Page</h2><p className="text-slate-600 mb-6">Please login to access your dashboard.</p><button onClick={() => navigate('/login')} className="w-full py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all">Login Now</button></div></div>} />
       </Routes>
 
-      <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} lang={lang} onAuthSuccess={handleAuthSuccess} />
-      
       {user && selectedSchemeForRoadmap && (
         <SchemeRoadmapModal 
           isOpen={!!selectedSchemeForRoadmap}

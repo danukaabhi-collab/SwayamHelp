@@ -3,17 +3,26 @@ import React, { useState, useEffect } from 'react';
 import { User, Language, Scheme } from '../types.ts';
 import { COLORS, getTranslation } from '../constants.tsx';
 import { discoverSchemes } from '../services/geminiService.ts';
+import { databaseService } from '../services/databaseService.ts';
 
 interface DashboardProps {
   user: User;
   lang: Language;
   onClose: () => void;
+  onLogout: () => void;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ user, lang, onClose }) => {
-  const [activeTab, setActiveTab] = useState<'profile' | 'about' | 'eligible' | 'apps' | 'help'>('profile');
+const Dashboard: React.FC<DashboardProps> = ({ user, lang, onClose, onLogout }) => {
+  const [activeTab, setActiveTab] = useState<'profile' | 'about' | 'eligible' | 'apps' | 'help' | 'saved'>('profile');
   const [recommendations, setRecommendations] = useState<Scheme[]>([]);
+  const [savedSchemes, setSavedSchemes] = useState<Scheme[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editData, setEditData] = useState<Partial<User>>({});
+  
+  const [isChangingAvatar, setIsChangingAvatar] = useState(false);
+  const [avatarUrl, setAvatarUrl] = useState('');
+  
   const t = getTranslation(lang);
 
   const fetchRecommendations = async () => {
@@ -24,14 +33,93 @@ const Dashboard: React.FC<DashboardProps> = ({ user, lang, onClose }) => {
     setIsLoading(false);
   };
 
+  const fetchSavedSchemes = async () => {
+    setIsLoading(true);
+    try {
+      const schemes = await databaseService.getSavedSchemes(user.id);
+      setSavedSchemes(schemes);
+    } catch (error) {
+      console.error("Error fetching saved schemes:", error);
+    }
+    setIsLoading(false);
+  };
+
   useEffect(() => {
     if (activeTab === 'eligible' && recommendations.length === 0) {
       fetchRecommendations();
+    } else if (activeTab === 'saved') {
+      fetchSavedSchemes();
     }
   }, [activeTab]);
 
+  const handleSaveProfile = async () => {
+    setIsLoading(true);
+    try {
+      await databaseService.updateProfile(user.id, editData);
+      setIsEditing(false);
+      // In a real app, we'd trigger a user refresh in App.tsx
+      window.location.reload(); 
+    } catch (error) {
+      console.error("Error updating profile:", error);
+    }
+    setIsLoading(false);
+  };
+
+  const handleSaveProfileDirectly = async (data: Partial<User>) => {
+    setIsLoading(true);
+    try {
+      await databaseService.updateProfile(user.id, data);
+      window.location.reload(); 
+    } catch (error) {
+      console.error("Error updating profile:", error);
+    }
+    setIsLoading(false);
+  };
+
+  const handleUnsave = async (schemeId: string) => {
+    try {
+      await databaseService.unsaveScheme(user.id, schemeId);
+      setSavedSchemes(prev => prev.filter(s => s.id !== schemeId));
+    } catch (error) {
+      console.error("Error unsaving:", error);
+    }
+  };
+
   const renderContent = () => {
     switch (activeTab) {
+      case 'saved':
+        return (
+          <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm space-y-6">
+            <h3 className="text-2xl font-bold" style={{ color: COLORS.primary }}>{t.savedSchemes}</h3>
+            {isLoading ? (
+              <div className="py-20 text-center animate-pulse text-blue-600 font-bold">Loading your saved schemes...</div>
+            ) : savedSchemes.length === 0 ? (
+              <div className="py-20 text-center text-slate-400 italic flex flex-col items-center gap-4">
+                <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center text-3xl opacity-50">❤️</div>
+                No saved schemes yet. Explore schemes and click the heart icon to save them.
+              </div>
+            ) : (
+              <div className="grid md:grid-cols-2 gap-6">
+                {savedSchemes.map((scheme) => (
+                  <div key={scheme.id} className="p-6 border border-slate-100 rounded-3xl bg-white shadow-sm hover:shadow-md transition-all group relative">
+                    <button 
+                      onClick={() => handleUnsave(scheme.id)}
+                      className="absolute top-4 right-4 p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-all"
+                      title="Unsave"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 fill-current" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd" /></svg>
+                    </button>
+                    <h4 className="font-bold text-lg pr-8">{scheme.name}</h4>
+                    <p className="text-xs text-slate-500 mb-4">{scheme.ministry || 'Government of India'}</p>
+                    <div className="flex gap-2 mt-auto">
+                      <button className="text-xs font-bold text-blue-600 hover:underline">View Roadmap</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        );
       case 'about':
         return (
           <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm space-y-6">
@@ -122,9 +210,45 @@ const Dashboard: React.FC<DashboardProps> = ({ user, lang, onClose }) => {
           <div className="grid md:grid-cols-3 gap-8">
             <div className="md:col-span-1 space-y-6">
               <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm text-center">
-                <div className="w-24 h-24 bg-blue-50 rounded-full flex items-center justify-center text-4xl mx-auto mb-4 border-4 border-white shadow-xl overflow-hidden relative group">
+                <div 
+                  onClick={() => setIsChangingAvatar(true)}
+                  className="w-24 h-24 bg-blue-50 rounded-full flex items-center justify-center text-4xl mx-auto mb-4 border-4 border-white shadow-xl overflow-hidden relative group cursor-pointer"
+                >
                   {user.profilePic ? <img src={user.profilePic} className="w-full h-full object-cover" /> : '👤'}
+                  <div className="absolute inset-0 bg-black/40 text-white text-[10px] font-bold opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    CHANGE
+                  </div>
                 </div>
+                
+                {isChangingAvatar && (
+                  <div className="mb-6 p-4 bg-slate-50 rounded-2xl border border-slate-200 animate-in fade-in slide-in-from-top-2">
+                    <input 
+                      type="text" 
+                      placeholder="Paste Image URL here..." 
+                      className="w-full p-2 text-xs border border-slate-200 rounded-lg mb-2"
+                      value={avatarUrl}
+                      onChange={(e) => setAvatarUrl(e.target.value)}
+                    />
+                    <div className="flex gap-2">
+                      <button 
+                        onClick={() => {
+                          if (avatarUrl) handleSaveProfileDirectly({ profilePic: avatarUrl });
+                          setIsChangingAvatar(false);
+                        }}
+                        className="flex-1 py-1.5 bg-blue-600 text-white text-xs font-bold rounded-lg"
+                      >
+                        Save
+                      </button>
+                      <button 
+                        onClick={() => setIsChangingAvatar(false)}
+                        className="flex-1 py-1.5 bg-white text-slate-500 text-xs font-bold rounded-lg border border-slate-200"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 <h3 className="text-xl font-bold" style={{ color: COLORS.primary }}>{user.name}</h3>
                 <p className="text-sm text-slate-500 mb-6">{user.email}</p>
                 <div className="p-6 rounded-3xl bg-slate-50 border border-dashed border-slate-200">
@@ -169,9 +293,107 @@ const Dashboard: React.FC<DashboardProps> = ({ user, lang, onClose }) => {
                     <div className="font-semibold text-slate-700">{user.income || '—'}</div>
                   </div>
                 </div>
-                <button className="mt-10 text-sm text-blue-600 font-bold hover:underline flex items-center gap-1">
-                  Edit Profile Information
-                </button>
+                {isEditing ? (
+                  <div className="mt-10 p-6 bg-slate-50 rounded-3xl border border-slate-200 space-y-4 animate-in fade-in slide-in-from-top-2">
+                    <h5 className="font-bold text-slate-800">Edit Profile</h5>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase">Age</label>
+                        <input 
+                          type="text" placeholder="Age" 
+                          className="w-full p-3 rounded-xl border border-slate-200"
+                          defaultValue={user.age}
+                          onChange={e => setEditData({...editData, age: e.target.value})}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase">Gender</label>
+                        <select 
+                          className="w-full p-3 rounded-xl border border-slate-200"
+                          defaultValue={user.gender}
+                          onChange={e => setEditData({...editData, gender: e.target.value})}
+                        >
+                          <option value="">Select Gender</option>
+                          <option value="Male">Male</option>
+                          <option value="Female">Female</option>
+                          <option value="Other">Other</option>
+                        </select>
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase">Caste Category</label>
+                        <select 
+                          className="w-full p-3 rounded-xl border border-slate-200"
+                          defaultValue={user.caste}
+                          onChange={e => setEditData({...editData, caste: e.target.value})}
+                        >
+                          <option value="">Select Category</option>
+                          <option value="General">General</option>
+                          <option value="OBC">OBC</option>
+                          <option value="SC">SC</option>
+                          <option value="ST">ST</option>
+                          <option value="EWS">EWS</option>
+                        </select>
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase">Occupation</label>
+                        <input 
+                          type="text" placeholder="Occupation" 
+                          className="w-full p-3 rounded-xl border border-slate-200"
+                          defaultValue={user.occupation}
+                          onChange={e => setEditData({...editData, occupation: e.target.value})}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase">Residence</label>
+                        <input 
+                          type="text" placeholder="Residence (State)" 
+                          className="w-full p-3 rounded-xl border border-slate-200"
+                          defaultValue={user.residence}
+                          onChange={e => setEditData({...editData, residence: e.target.value})}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase">Income Range</label>
+                        <select 
+                          className="w-full p-3 rounded-xl border border-slate-200"
+                          defaultValue={user.income}
+                          onChange={e => setEditData({...editData, income: e.target.value})}
+                        >
+                          <option value="">Select Range</option>
+                          <option value="0-2.5L">0 - 2.5 Lakhs</option>
+                          <option value="2.5L-5L">2.5 - 5 Lakhs</option>
+                          <option value="5L-8L">5 - 8 Lakhs</option>
+                          <option value="8L+">Above 8 Lakhs</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div className="flex gap-3 pt-4">
+                      <button 
+                        onClick={handleSaveProfile}
+                        disabled={isLoading}
+                        className="px-6 py-2 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 disabled:opacity-50"
+                      >
+                        {isLoading ? 'Saving...' : 'Save Changes'}
+                      </button>
+                      <button 
+                        onClick={() => setIsEditing(false)}
+                        className="px-6 py-2 bg-white text-slate-600 border border-slate-200 rounded-xl font-bold"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button 
+                    onClick={() => {
+                      setEditData(user);
+                      setIsEditing(true);
+                    }}
+                    className="mt-10 text-sm text-blue-600 font-bold hover:underline flex items-center gap-1"
+                  >
+                    Edit Profile Information
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -183,16 +405,25 @@ const Dashboard: React.FC<DashboardProps> = ({ user, lang, onClose }) => {
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-12 animate-in fade-in slide-in-from-top-4 duration-500">
       <div className="flex items-center justify-between mb-10">
         <h2 className="text-3xl font-bold" style={{ color: COLORS.primary }}>{t.dashboard}</h2>
-        <button onClick={onClose} className="text-slate-500 hover:text-slate-900 flex items-center gap-1 font-medium transition-colors">
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
-          Back Home
-        </button>
+        <div className="flex items-center gap-4">
+          <button onClick={onClose} className="text-slate-500 hover:text-slate-900 flex items-center gap-1 font-medium transition-colors">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+            Back Home
+          </button>
+          <button 
+            onClick={onLogout}
+            className="text-red-500 hover:text-red-700 font-bold text-sm"
+          >
+            {t.logout}
+          </button>
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-4 mb-8">
         {[
           { id: 'profile', label: t.profile, icon: '👤' },
           { id: 'eligible', label: t.findEligible, icon: '🔍' },
+          { id: 'saved', label: t.savedSchemes, icon: '❤️' },
           { id: 'apps', label: t.myApps, icon: '📝' },
           { id: 'help', label: t.help, icon: '❓' }
         ].map(tab => (

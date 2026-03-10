@@ -29,8 +29,33 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ lang: initialLang }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState<number | null>(null);
+  const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
+
+  const quickActions = [
+    { label: "Check Eligibility", query: "Can you check my eligibility for government schemes?", icon: "📋" },
+    { label: "Student Schemes", query: "Show me top schemes for students.", icon: "🎓" },
+    { label: "Farmer Support", query: "What are the latest schemes for farmers?", icon: "🚜" },
+    { label: "Women Empowerment", query: "List schemes specifically for women.", icon: "👩" },
+    { label: "Startup India", query: "How can I get support for my new business?", icon: "🚀" }
+  ];
+
+  const copyToClipboard = (text: string, index: number) => {
+    navigator.clipboard.writeText(text);
+    setCopiedIndex(index);
+    setTimeout(() => setCopiedIndex(null), 2000);
+  };
+
+  const clearChat = () => {
+    setMessages([
+      {
+        role: 'assistant',
+        content: `${t.namaste}. ${t.chatPrompt}`,
+        timestamp: new Date()
+      }
+    ]);
+  };
 
   // Initialize Speech Recognition
   useEffect(() => {
@@ -143,6 +168,18 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ lang: initialLang }) => {
     scrollToBottom();
   }, [messages, isLoading]);
 
+  useEffect(() => {
+    const handleOpenChat = (event: any) => {
+      setIsOpen(true);
+      if (event.detail?.query) {
+        // Delay slightly to ensure state update for isOpen is processed
+        setTimeout(() => handleSend(event.detail.query), 100);
+      }
+    };
+    window.addEventListener('open-swayamhelp-chat', handleOpenChat);
+    return () => window.removeEventListener('open-swayamhelp-chat', handleOpenChat);
+  }, [currentLang]);
+
   const handleSend = async (textOverride?: string) => {
     const textToSend = textOverride || input;
     if (!textToSend.trim() || isLoading) return;
@@ -212,6 +249,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ lang: initialLang }) => {
               <option key={l.code} value={l.code} className="text-slate-800">{l.name}</option>
             ))}
           </select>
+          <button onClick={clearChat} className="text-white/60 hover:text-white p-2" title="Clear Chat">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+          </button>
           <button onClick={() => setIsOpen(false)} className="text-white/60 hover:text-white p-2">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
           </button>
@@ -220,6 +260,26 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ lang: initialLang }) => {
 
       {/* Messages Area */}
       <div className="flex-grow overflow-y-auto p-4 space-y-4 bg-slate-50/50">
+        {messages.length === 1 && (
+          <div className="mb-6 animate-in fade-in slide-in-from-top-4 duration-500">
+            <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm mb-4">
+              <h4 className="text-sm font-bold text-slate-800 mb-3">Quick Actions</h4>
+              <div className="grid grid-cols-2 gap-2">
+                {quickActions.map((action, i) => (
+                  <button
+                    key={i}
+                    onClick={() => handleSend(action.query)}
+                    className="flex flex-col items-center gap-2 p-3 bg-slate-50 border border-slate-100 rounded-2xl hover:border-blue-500 hover:bg-blue-50 transition-all text-center group"
+                  >
+                    <span className="text-xl group-hover:scale-110 transition-transform">{action.icon}</span>
+                    <span className="text-[10px] font-bold text-slate-600 group-hover:text-blue-700">{action.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
         {messages.map((msg, i) => (
           <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
             <div className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm shadow-sm leading-relaxed relative ${
@@ -229,23 +289,36 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ lang: initialLang }) => {
               <div className="flex items-center justify-between mt-2 opacity-50 text-[10px]">
                 <span>{msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                 {msg.role === 'assistant' && (
-                  <button 
-                    onClick={() => speakText(msg.content, i)} 
-                    className={`p-1 rounded hover:bg-slate-100 transition-colors flex items-center gap-1 ${isSpeaking === i ? 'text-blue-600 font-bold' : ''}`}
-                    title={isSpeaking === i ? "Stop" : "Listen"}
-                  >
-                    {isSpeaking === i ? (
-                      <>
-                        <span className="w-2 h-2 bg-blue-600 rounded-full animate-pulse"></span>
-                        Stop
-                      </>
-                    ) : (
-                      <>
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /></svg>
-                        Listen
-                      </>
-                    )}
-                  </button>
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={() => copyToClipboard(msg.content, i)}
+                      className="p-1 rounded hover:bg-slate-100 transition-colors flex items-center gap-1"
+                      title="Copy"
+                    >
+                      {copiedIndex === i ? (
+                        <span className="text-green-600 font-bold">Copied!</span>
+                      ) : (
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" /></svg>
+                      )}
+                    </button>
+                    <button 
+                      onClick={() => speakText(msg.content, i)} 
+                      className={`p-1 rounded hover:bg-slate-100 transition-colors flex items-center gap-1 ${isSpeaking === i ? 'text-blue-600 font-bold' : ''}`}
+                      title={isSpeaking === i ? "Stop" : "Listen"}
+                    >
+                      {isSpeaking === i ? (
+                        <>
+                          <span className="w-2 h-2 bg-blue-600 rounded-full animate-pulse"></span>
+                          Stop
+                        </>
+                      ) : (
+                        <>
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /></svg>
+                          Listen
+                        </>
+                      )}
+                    </button>
+                  </div>
                 )}
               </div>
             </div>

@@ -80,6 +80,10 @@ const Hero: React.FC<HeroProps> = ({ lang, user, onSearch }) => {
     }
   };
 
+  const openChatWithQuery = (query: string) => {
+    window.dispatchEvent(new CustomEvent('open-swayamhelp-chat', { detail: { query } }));
+  };
+
   return (
     <div className="relative overflow-hidden pt-20 pb-24 hero-animate min-h-[600px] flex flex-col justify-center">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 w-full">
@@ -185,18 +189,85 @@ const Hero: React.FC<HeroProps> = ({ lang, user, onSearch }) => {
           </div>
 
           {!isLoading && results.length === 0 && !error && (
-            <div className="mt-8 flex flex-wrap justify-center gap-4">
-              <span className="text-white/80 text-sm font-bold">Trending:</span>
-              {['PM-KISAN', 'Ayushman Bharat', 'Lakhpati Didi', 'PM Vishwakarma'].map(item => (
+            <>
+              <div className="mt-8 flex flex-wrap justify-center gap-4">
+                <span className="text-white/80 text-sm font-bold">Trending:</span>
+                {['PM-KISAN', 'Ayushman Bharat', 'Lakhpati Didi', 'PM Vishwakarma'].map(item => (
+                  <button 
+                    key={item} 
+                    onClick={() => { setQuery(item); handleSearch(item); }}
+                    className="bg-white/10 hover:bg-white/20 text-white px-4 py-1.5 rounded-full text-xs transition-colors backdrop-blur-sm border border-white/20"
+                  >
+                    {item}
+                  </button>
+                ))}
+              </div>
+
+              {/* Special Quick Access Buttons */}
+              <div className="mt-12 grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-3xl mx-auto">
                 <button 
-                  key={item} 
-                  onClick={() => { setQuery(item); handleSearch(item); }}
-                  className="bg-white/10 hover:bg-white/20 text-white px-4 py-1.5 rounded-full text-xs transition-colors backdrop-blur-sm border border-white/20"
+                  onClick={() => {
+                    const el = document.getElementById('how-it-works');
+                    if (el) el.scrollIntoView({ behavior: 'smooth' });
+                  }}
+                  className="flex items-center justify-center gap-3 bg-white/10 hover:bg-white/20 text-white p-4 rounded-2xl border border-white/20 backdrop-blur-md transition-all group"
                 >
-                  {item}
+                  <span className="text-2xl group-hover:scale-110 transition-transform">ℹ️</span>
+                  <div className="text-left">
+                    <div className="text-xs font-bold uppercase tracking-wider opacity-60">{t.quick_how_it_works}</div>
+                    <div className="text-sm font-bold">Project Guide</div>
+                  </div>
                 </button>
-              ))}
-            </div>
+
+                <button 
+                  onClick={() => openChatWithQuery("Can you check my eligibility for government schemes based on my profile?")}
+                  className="flex items-center justify-center gap-3 bg-green-500/20 hover:bg-green-500/30 text-white p-4 rounded-2xl border border-green-500/30 backdrop-blur-md transition-all group"
+                >
+                  <span className="text-2xl group-hover:scale-110 transition-transform">✅</span>
+                  <div className="text-left">
+                    <div className="text-xs font-bold uppercase tracking-wider opacity-60">{t.quick_eligibility}</div>
+                    <div className="text-sm font-bold">Check Now</div>
+                  </div>
+                </button>
+
+                <div className="relative group">
+                  <button 
+                    className="w-full flex items-center justify-center gap-3 bg-blue-500/20 hover:bg-blue-500/30 text-white p-4 rounded-2xl border border-blue-500/30 backdrop-blur-md transition-all group"
+                  >
+                    <span className="text-2xl group-hover:scale-110 transition-transform">🏛️</span>
+                    <div className="text-left">
+                      <div className="text-xs font-bold uppercase tracking-wider opacity-60">{t.quick_resources}</div>
+                      <div className="text-sm font-bold">Official Portals</div>
+                    </div>
+                  </button>
+                  
+                  {/* Dropdown for Resources */}
+                  <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-2xl overflow-hidden opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 border border-slate-100">
+                    <a href="https://india.gov.in" target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-4 hover:bg-slate-50 transition-colors border-bottom border-slate-50">
+                      <span className="text-xl">🇮🇳</span>
+                      <div className="text-left">
+                        <div className="text-xs font-bold text-slate-800">{t.resource_india}</div>
+                        <div className="text-[10px] text-slate-500">National Portal of India</div>
+                      </div>
+                    </a>
+                    <a href="https://myscheme.gov.in" target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-4 hover:bg-slate-50 transition-colors border-bottom border-slate-50">
+                      <span className="text-xl">📋</span>
+                      <div className="text-left">
+                        <div className="text-xs font-bold text-slate-800">{t.resource_myscheme}</div>
+                        <div className="text-[10px] text-slate-500">Scheme Discovery Platform</div>
+                      </div>
+                    </a>
+                    <a href="https://digitalindia.gov.in" target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-4 hover:bg-slate-50 transition-colors">
+                      <span className="text-xl">⚡</span>
+                      <div className="text-left">
+                        <div className="text-xs font-bold text-slate-800">{t.resource_digital_india}</div>
+                        <div className="text-[10px] text-slate-500">Power To Empower</div>
+                      </div>
+                    </a>
+                  </div>
+                </div>
+              </div>
+            </>
           )}
         </div>
       </div>

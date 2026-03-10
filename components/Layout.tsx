@@ -36,12 +36,56 @@ const Layout: React.FC<LayoutProps> = ({ children, lang, onLanguageChange, user,
               <button onClick={() => navigate('/help')} className="hover:text-white transition-colors">{t.help}</button>
               
               {user ? (
-                <div className="flex items-center gap-6">
-                  <button onClick={() => navigate('/dashboard')} className="hover:text-white underline decoration-green-400 underline-offset-4">{t.account}</button>
-                  <button onClick={onLogout} className="text-red-300 hover:text-red-100 font-bold">{t.logout}</button>
+                <div className="flex items-center gap-4">
+                  <div className="relative group">
+                    <button 
+                      onClick={() => navigate('/dashboard')}
+                      className="flex items-center gap-2 hover:bg-white/10 px-3 py-1.5 rounded-xl transition-all border border-transparent hover:border-white/20"
+                    >
+                      <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center text-sm border border-white/30 overflow-hidden">
+                        {user.profilePic ? (
+                          <img src={user.profilePic} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                          <span>{user.name.charAt(0).toUpperCase()}</span>
+                        )}
+                      </div>
+                      <span className="font-bold hidden sm:block">{user.name.split(' ')[0]}</span>
+                    </button>
+                    
+                    {/* Hover Dropdown */}
+                    <div className="absolute right-0 mt-1 w-48 bg-white rounded-2xl shadow-2xl py-2 z-[60] border border-slate-100 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all">
+                      <div className="px-4 py-2 border-b border-slate-50 mb-1">
+                        <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Account</p>
+                        <p className="text-sm font-bold text-slate-800 truncate">{user.email}</p>
+                      </div>
+                      <button 
+                        onClick={() => navigate('/dashboard')}
+                        className="w-full text-left px-4 py-2 text-sm text-slate-600 hover:bg-slate-50 flex items-center gap-2"
+                      >
+                        <span>👤</span> {t.dashboard}
+                      </button>
+                      <button 
+                        onClick={() => navigate('/help')}
+                        className="w-full text-left px-4 py-2 text-sm text-slate-600 hover:bg-slate-50 flex items-center gap-2"
+                      >
+                        <span>❓</span> {t.help}
+                      </button>
+                      <div className="h-px bg-slate-100 my-1"></div>
+                      <button 
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          onLogout();
+                        }}
+                        className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 font-bold flex items-center gap-2"
+                      >
+                        <span>🚪</span> {t.logout}
+                      </button>
+                    </div>
+                  </div>
                 </div>
               ) : (
-                <button onClick={onAuthClick} className="bg-white text-blue-900 px-4 py-1.5 rounded-lg font-bold hover:bg-blue-50 transition-all">
+                <button onClick={onAuthClick} className="bg-white text-blue-900 px-4 py-1.5 rounded-lg font-bold hover:bg-blue-50 transition-all shadow-lg active:scale-95">
                   {t.nav_login}
                 </button>
               )}

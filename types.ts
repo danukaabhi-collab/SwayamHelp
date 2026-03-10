@@ -54,3 +54,12 @@ export interface Message {
   content: string;
   timestamp: Date;
 }
+
+export interface AuthEvent {
+  id?: string;
+  user_id?: string;
+  email: string;
+  event_type: 'login' | 'logout' | 'login_failed';
+  details?: string;
+  created_at?: string;
+}

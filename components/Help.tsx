@@ -40,20 +40,28 @@ const Help: React.FC<HelpProps> = ({ lang }) => {
         <p className="text-xl text-slate-600 leading-relaxed">
           Need assistance? We're here to help you navigate the digital seva landscape.
         </p>
-      </div>
-
-      <div className="grid md:grid-cols-3 gap-8 mb-20">
-        {[
-          { icon: "💬", title: "AI Chat Support", desc: "Talk to our AI assistant 24/7 for instant answers." },
-          { icon: "📧", title: "Email Support", desc: "Reach us at support@swayamhelp.gov.in for complex queries." },
-          { icon: "📞", title: "Helpline", desc: "Call 1800-XXX-XXXX for direct assistance (9 AM - 6 PM)." }
-        ].map((item, i) => (
-          <div key={i} className="p-8 bg-white border border-slate-100 rounded-[40px] shadow-sm text-center hover:shadow-md transition-all">
-            <div className="text-4xl mb-4">{item.icon}</div>
-            <h3 className="text-xl font-bold mb-2 text-slate-900">{item.title}</h3>
-            <p className="text-sm text-slate-500">{item.desc}</p>
+      </div>      <div className="mb-20">
+        <div className="bg-gradient-to-br from-[#0B3C5D] to-[#138808] p-12 rounded-[40px] text-white text-center shadow-xl relative overflow-hidden group">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-32 -mt-32 blur-3xl group-hover:bg-white/20 transition-all duration-700"></div>
+          <div className="absolute bottom-0 left-0 w-64 h-64 bg-black/10 rounded-full -ml-32 -mb-32 blur-3xl group-hover:bg-black/20 transition-all duration-700"></div>
+          
+          <div className="relative z-10">
+            <div className="text-6xl mb-6">🤖</div>
+            <h2 className="text-3xl font-bold mb-4">24/7 AI Chat Support</h2>
+            <p className="text-lg text-white/80 mb-8 max-w-2xl mx-auto">
+              Our advanced SwayamHelp AI is trained on all government schemes. Get instant answers, check eligibility, and find application links in seconds.
+            </p>
+            <button 
+              onClick={() => {
+                const chatBtn = document.querySelector('button[aria-label="Open SwayamHelp Assistant"]') as HTMLButtonElement;
+                if (chatBtn) chatBtn.click();
+              }}
+              className="px-8 py-4 bg-white text-[#0B3C5D] rounded-full font-bold text-lg hover:scale-105 active:scale-95 transition-all shadow-lg"
+            >
+              Start Chatting Now
+            </button>
           </div>
-        ))}
+        </div>
       </div>
 
       <div className="bg-white p-12 rounded-[40px] border border-slate-100 shadow-sm">

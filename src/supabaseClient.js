@@ -1,10 +1,22 @@
 import { createClient } from "@supabase/supabase-js";
 
-// --- CONFIGURATION START ---
-// Replace the values below with your actual Supabase project URL and Public API Key
-const SUPABASE_URL = "https://zlosfguyccilaigcchpc.supabase.co";
-const SUPABASE_PUBLIC_KEY = "sb_publishable_S7fk6HEqhjzrUNMODWjtLA_9o2vefC_";
-// --- CONFIGURATION END ---
+// Supabase configuration using environment variables
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_PUBLIC_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+if (!SUPABASE_URL || !SUPABASE_PUBLIC_KEY) {
+  console.warn("Supabase credentials missing. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your environment.");
+}
 
 // Create and export the Supabase client
-export const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLIC_KEY);
+export const supabase = createClient(
+  SUPABASE_URL || "", 
+  SUPABASE_PUBLIC_KEY || "", 
+  {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true
+    }
+  }
+);
